@@ -1,5 +1,4 @@
 import re
-from tkinter import E 
 class rtspPacket:
     RTSP_VERSION = 'RTSP/1.0'
 
@@ -37,20 +36,23 @@ class rtspPacket:
             r"(?P<request_type>\w+) rtsp://(?P<video_file_path>\S+) (?P<rtsp_version>RTSP/\d+.\d+)\r?\n"
             r"Seq: (?P<sequence_number>\d+)\r?\n"
             r"(Range: (?P<play_range>\w+=\d+-\d+\r?\n))?"
-            r"(Transport: .*client_port=(?P<dst_port>\d+).*\r?\n)?"  # in case of SETUP request
+            r"(Transport: RTP/UDP;client_port=(?P<dst_port>\d+).*\r?\n)?"  # in case of SETUP request
             r"(Session: (?P<session_id>\d+)\r?\n)?",
             request
         )
+
         if match is None:
             raise Exception(f'Fail to parse: \n{request}')
         req = match.groupdict()
-
+        if req['request_type']=='SETUP' and req['session_id']==None:
+            req['session_id'] = -1
+        
         return cls(
             type=req['request_type'],
             sessionId=int(req['session_id']),
             seqNum=int(req['sequence_number']),
             filePath=req['video_file_path'],
-            port=int(req['dst_port'])
+            port=req['dst_port']
         )
 
     def buildResponse(self) -> bytes:
@@ -66,13 +68,13 @@ class rtspPacket:
     def buildRequest(self) -> bytes:
         if any((attr is None for attr in (self.type, self.seqNum, self.sessionId))):
             raise Exception('Missing attribute')
-        if type=='RESPONSE':
+        if self.type=='RESPONSE':
             raise Exception('Invalid request type: Response')
         request_lines = [
-            f"{type} rtsp://{self.filePath} {self.RTSP_VERSION}",
+            f"{self.type} rtsp://{self.filePath} {self.RTSP_VERSION}",
             f"Seq: {self.seqNum}",
         ]
-        if type=='SETUP':
+        if self.type=='SETUP':
             if self.port is None:
                 raise Exception('Missing destination port')
             request_lines.append(f"Transport: RTP/UDP;client_port={self.port}")
