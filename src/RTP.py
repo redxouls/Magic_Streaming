@@ -16,7 +16,21 @@ class RTP:
         CSRC: int = None,
         extension: bytes = None,
     ):
+        """RTP
 
+        Args:
+            payloadType (int): 7 bits. Ref: https://www.rfc-editor.org/rfc/rfc3551#page-32 .
+            seqNum (int): 16 bits.
+            timeStamp (int): 32 bits.
+            payload (bytes): Your payload
+            padding (bool, optional): 1 bit. Whether to pad payload to 4*n bytes. Defaults to False.
+            Extension (bool, optional): 1 bit. Defaults to False.
+            CSRCcount (int, optional): 4 bits. Defaults to 0x0.
+            Marker (int, optional): 1 bit Defaults to 0b0.
+            SSRC (int, optional): 32 bits. Defaults to 0x00000000.
+            CSRC (int, optional): 32 bits. Defaults to None.
+            extension (bytes, optional): The first 32-bit word contains a profile-specific identifier (16 bits) and a length specifier (16 bits) that indicates the length of the extension in 32-bit units, excluding the 32 bits of the extension header. Defaults to None.
+        """
         self.Version = 2
         self.P = int(padding)
         self.X = int(Extension)
