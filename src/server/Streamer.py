@@ -51,6 +51,7 @@ class Streamer:
         while to_send:
             try:
                 self.rtp_socket.sendto(to_send[:self.DEFAULT_CHUNK_SIZE], (self.client_ip, self.client_port))
+                time.sleep(0.0035)
             except socket.error as e:
                 print(f"failed to send rtp packet: {e}")
                 return
