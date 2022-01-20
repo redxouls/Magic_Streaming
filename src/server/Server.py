@@ -1,7 +1,5 @@
-import socket, threading
-from rtsp_packet import rtspPacket
-from Session import Session
-import uuid
+import socket, uuid
+from .Session import Session
 
 
 class Server:
@@ -9,44 +7,37 @@ class Server:
         self.ip = args.ip
         self.port = args.port
         self.verbose = args.verbose
-        self.timeout = args.timeout / 1000
+        self.timeout = args.timeout
         self.sessions = {}
 
     def server_init(self):
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.bind((self.ip, self.port))
-        self.s.listen(5)
-        self.s.setblocking(False)
+        self.s.listen(0)
         print("RTSP server listening at %s:%s" % (self.ip, self.port))
 
     def accept_connection(self):
-        try:
-            client, client_ip = self.s.accept()
-            client.settimeout(self.timeout / 1000)
-            print(client_ip, client_ip)
-            self.sessions[str(uuid.uuid4())] = Session(client=client, ip=client_ip)
-        except:
-            pass
-
-    def on_client(self):
-        toDel = []
-        for session, id in zip(self.sessions.values(), self.sessions.keys()):
-            try:
-                alive = session.handle_receive()
-                if not alive:
-                    print("close {}".format(id))
-                    session.close_connection()
-                    toDel.append(id)
-            except socket.timeout:
-                pass
-        for id in toDel:
-            del self.sessions[id]
-
+        client, client_addr = self.s.accept()
+        client.settimeout(self.timeout)
+        print(client_addr)
+        incoming_session_id = str(uuid.uuid4())
+        incoming_session = Session(client=client, client_addr=client_addr, rtsp_session_id=incoming_session_id)
+        incoming_session.listen()
+        self.sessions[incoming_session_id] = incoming_session
+        
+    def clean_timeout(self):
+        to_del = [session_id for session_id, session in self.sessions.items() if session.client.fileno() == -1]
+        to_del_num = len(to_del)
+        for session_id in to_del:
+            del self.sessions[session_id]
+        
+        print("Toal session: %s, Release session# = %d" % (len(self.sessions), to_del_num))
+            
     def main(self):
         self.server_init()
         while True:
+            self.clean_timeout()
             self.accept_connection()
-            self.on_client()
 
 
 if __name__ == "__main__":
@@ -65,10 +56,10 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--timeout",
-        default="1",
+        default="5",
         type=int,
-        metavar="<timeout>",
-        help="wait time before diconnection",
+        metavar="<timeout(second)>",
+        help="wait time before diconnection (second)",
     )
     parser.add_argument("--verbose", action="store_true", help="Show debug messages")
     args = parser.parse_args()
