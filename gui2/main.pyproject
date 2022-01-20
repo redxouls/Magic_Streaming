@@ -1,0 +1,3 @@
+{
+    "files": ["qml/components/Resize.qml","qml/main.qml","qml/components/Toggle.qml","main.py","qml/components/Control.qml","qml/components/PageCtrlBtn.qml","qml/components/Play.qml"]
+}
