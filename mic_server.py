@@ -4,6 +4,16 @@ import sys
 import pyaudio
 import socket
 import select
+import time
+
+
+import pyaudio
+p = pyaudio.PyAudio()
+info = p.get_host_api_info_by_index(0)
+numdevices = info.get('deviceCount')
+for i in range(0, numdevices):
+        if (p.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
+            print("Input Device id ", i, " - ", p.get_device_info_by_host_api_device_index(0, i))
 
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
@@ -11,40 +21,19 @@ RATE = 44100
 CHUNK = 4096
 
 audio = pyaudio.PyAudio()
-
-serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-serversocket.bind(('127.0.0.1', int(sys.argv[1])))
-serversocket.listen(5)
-
-
-def callback(in_data, frame_count, time_info, status):
-    for s in read_list[1:]:
-        s.send(in_data)
-    return (None, pyaudio.paContinue)
-
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+# serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 # start Recording
-stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK, stream_callback=callback)
-# stream.start_stream()
+stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True,input_device_index=2, frames_per_buffer=CHUNK)
 
-read_list = [serversocket]
-print("recording...")
+# input_stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, output=True, frames_per_buffer=CHUNK)
 
-try:
-    while True:
-        readable, writable, errored = select.select(read_list, [], [])
-        for s in readable:
-            if s is serversocket:
-                (clientsocket, address) = serversocket.accept()
-                read_list.append(clientsocket)
-                print("Connection from", address)
-            else:
-                data = s.recv(1024)
-                if not data:
-                    read_list.remove(s)
-except KeyboardInterrupt:
-    pass
 
+while True:
+    data = stream.read(CHUNK)
+    print(len(data))
+    s.sendto(data, (sys.argv[1], int(sys.argv[2])))
 
 print("finished recording")
 

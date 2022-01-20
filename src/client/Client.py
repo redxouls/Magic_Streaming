@@ -26,6 +26,8 @@ class Client():
         }
         self.connected = False
         self.seq = 0
+
+        self.rtp_sockets = dict()
         
     def connect(self):
         self.rtsp_s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -38,14 +40,15 @@ class Client():
 
     def setup(self):
         print("Setup")
-        self.rtp_init()
+        self.rtp_init('camera')
+        # self.rtp_init('mic')
 
     def play(self):
         print("Play")
         while True:
             start = time.time()
             try:
-                decode_img = self.rtp_get_frame()
+                decode_img = self.rtp_get_frame('camera')
                 cv2.imshow('frame', decode_img)
             except:
                 print("Error frame drop")
@@ -62,7 +65,7 @@ class Client():
     def tear_down(self):
         print("teardown")
 
-    def send_request(self, operation):
+    def send_request(self, operation, device):
         operation = operation.upper()
         print("%s Request Sending..." % operation)
         packet = RTSP(
@@ -70,7 +73,7 @@ class Client():
             seq_num=self.seq,
             rtp_dst_port=self.rtp_port,
             session_id=0,
-            file_path="video.mp4"
+            file_path=device
         ).build_request()
 
         if not self.connected:
@@ -108,26 +111,34 @@ class Client():
                 continue
             else:
                 start = time.time()
-                self.send_request(operation_type)
+                self.send_request(operation_type, 'camera')
                 self.operations[operation_type]()
                 self.handle_receive()
                 print((time.time() - start))                
             print()
 
     
-    def rtp_init(self):
-        self.rtp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.rtp_socket.bind(("127.0.0.1", self.rtp_port))
-        self.rtp_socket.settimeout(self.rtp_timeout / 1000.)
+    def rtp_init(self, device):
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        port = self.rtp_port + len(self.rtp_sockets)
+        s.bind(("127.0.0.1", port))
+        s.settimeout(self.rtp_timeout / 1000.)
+        self.rtp_sockets[device] = (s, port)
 
         
-    def rtp_get_frame(self):
+    def rtp_get_frame(self, device):
+        rtp_socket, _ = self.rtp_sockets[device]
+
         recv = bytes()
         print('Waiting RTP packet...')
-        eof = b'\xff\xd9'
+        if device == 'camera':
+            eof = b'\xff\xd9'
+        elif device == 'mic':
+            eof = b'Sound End'
+        
         while True:
             try:
-                recv += self.rtp_socket.recv(self.DEFAULT_CHUNK_SIZE)
+                recv += rtp_socket.recv(self.DEFAULT_CHUNK_SIZE)
                 if recv.endswith(eof):
                     break
             except socket.timeout:
@@ -137,6 +148,8 @@ class Client():
         img_raw = received_packet.payload
         io_buf = BytesIO(img_raw)
         decode_img = cv2.imdecode(np.frombuffer(io_buf.getbuffer(), np.uint8), 1)
+        if (device == 'mic'):
+            print(len(recv))
         return decode_img
         
 
