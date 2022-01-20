@@ -1,4 +1,5 @@
 from client.Client import Client
+from object_detect import object_detection
 import argparse
 
 def get_args():
@@ -23,7 +24,8 @@ def get_args():
 if __name__ == '__main__':
     args = get_args()
     print(args)
-    client = Client(args)
+    detector = object_detection("yolov5s.pt")
+    client = Client(args, detector)
     if args.interactive:
         client.shell()
     else:

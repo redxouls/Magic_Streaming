@@ -17,7 +17,7 @@ CHUNK = 4096
 
 class Client():
     DEFAULT_CHUNK_SIZE = 4096
-    def __init__(self, args):
+    def __init__(self, args, detector):
         self.ip = args.ip
         self.port = args.port
         self.rtp_port = args.rtp_port
@@ -34,6 +34,8 @@ class Client():
         self.seq = 0
 
         self.rtp_sockets = dict()
+
+        self.detector = detector
         
     def connect(self):
         self.rtsp_s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -66,18 +68,39 @@ class Client():
 
         self.send_request('play', 'camera')
         self.handle_receive()
+        counts = 0
         while True:
             start = time.time()
             try:
                 img_raw = self.rtp_get_raw('camera')
                 io_buf = BytesIO(img_raw)
                 decode_img = cv2.imdecode(np.frombuffer(io_buf.getbuffer(), np.uint8), 1)
+                #  TO DO HERE
+                if counts % 10 == 0:
+                    results = self.detector.bounding_box(decode_img)
+                
+                emphasize = []
+                for r in results:
+                    emphasize.append(
+                        decode_img[r[0][1]:r[1][1], r[0][0]:r[1][0], :]
+                    )
+
+                decode_img = cv2.blur(decode_img, (30, 30))
+
+                for i, img in enumerate(emphasize):
+                    decode_img[
+                        results[i][0][1]:results[i][1][1], results[i][0][0]:results[i][1][0], :
+                    ] = img
+
                 cv2.imshow('frame', decode_img)
-            except:
+            except Exception as e:
                 print("Error frame drop")
+                print(e)
             finally:
-                time.sleep(0.1)
-                print(1/(time.time() - start))
+                print(counts, time.time() - start)
+                if counts % 10 != 0:
+                    time.sleep(0.05)
+                counts += 1
             # 若按下 q 鍵則離開迴圈
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
@@ -89,7 +112,6 @@ class Client():
         try:
             while True:
                 data = self.rtp_get_raw('mic')
-                print(len(data))
                 data = data[:-len(eof)]
                 stream.write(data)
         except KeyboardInterrupt:
@@ -169,9 +191,8 @@ class Client():
         
     def rtp_get_raw(self, device):
         rtp_socket, _ = self.rtp_sockets[device]
-
+        
         recv = bytes()
-        print('Waiting RTP packet...')
         if device == 'camera':
             eof = b'\xff\xd9'
         elif device == 'mic':
@@ -184,7 +205,6 @@ class Client():
                     break
             except socket.timeout:
                 continue
-        print(f"Packet Received!")
         received_packet = RTP.receive(recv)
         raw = received_packet.payload
         return raw
