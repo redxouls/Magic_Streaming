@@ -8,34 +8,22 @@ class Streamer:
     class MEDIA_TYPE:
         STRING = 0
 
-    def __init__(self, client_ip, client_port,  file_path):
+    def __init__(self, client_ip):
+        # , client_port,  file_path
         self.client_ip = client_ip
-        self.client_port = int(client_port)
-        self.file_path = file_path
-        print(client_port)
-        print("Video Streamer createrd for file: %s" % self.file_path)
-        print("Target: %s:%d" % (self.client_ip, self.client_port))
         self.rtp_sockets = dict()
-        self.rtp_sockets_init()
-        
         self.devices = dict()
-        self.devices['camera'] = Camera()
-        self.devices['mic'] = Mic()
-        
         self.threads = dict()
-
-
-    def rtp_sockets_init(self):
-        self.rtp_sockets['camera'] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.rtp_sockets['mic'] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.available_devices = {
+            "camera": Camera,
+            "mic": Mic
+        }        
         
-    def start_stream(self):
-        self.threads['camera'] = threading.Thread(target=self.stream, args=('camera',))
-        self.threads['camera'].start()
-    
-        self.threads['mic'] = threading.Thread(target=self.stream, args=('mic',))
-        self.threads['mic'].start()
-    
+    def start_stream(self, device):
+        print("Starting streaming %s" % device)
+        self.threads[device] = threading.Thread(target=self.stream, args=(device,))
+        self.threads[device].start()
+        print("Daemon %s" % device)
 
     def stream(self, device):
         print("Start Streaming video to target client")        
@@ -59,18 +47,32 @@ class Streamer:
             time.sleep(0.1)
 
     def send_rtp_packet(self, device, packet):
-        if device == 'mic':
-            print(device, "sending", packet)
-            return
+        rtp_socket, client_port = self.rtp_sockets[device]
+        print(device, client_port)
+        # if device == 'mic':
+        #     return
+        #     print(device, "sending", packet)
         to_send = packet[:]
         while to_send:
             try:
-                self.rtp_sockets[device].sendto(to_send[:self.DEFAULT_CHUNK_SIZE], (self.client_ip, self.client_port))
+                rtp_socket.sendto(to_send[:self.DEFAULT_CHUNK_SIZE], (self.client_ip, client_port))
                 time.sleep(0.0035)
             except socket.error as e:
                 print(f"failed to send rtp packet: {e}")
                 return
             to_send = to_send[self.DEFAULT_CHUNK_SIZE:]
     
+    def add_device(self, port, device):
+        if device not in self.available_devices:
+            return
+        self.devices[device] = self.available_devices[device]()
+        print(self.devices)
+        print("Add device: %s" % device)
+        port = int(port)
+        self.rtp_sockets[device] = (socket.socket(socket.AF_INET, socket.SOCK_DGRAM), port)
+        print("Target: %s:%d" % (self.client_ip, port))
+
+        
+
 if __name__  == "__main__":
     video_streamer = VideoStreamer("video.mp4")

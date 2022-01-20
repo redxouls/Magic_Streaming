@@ -22,28 +22,26 @@ class Session:
             "pause": self.on_pause,
             "teardown": self.on_tear_down,
         }
-        self.status = self.STATE.INIT
+        self.streamer = Streamer(self.client_addr[0])
+        # self.status = self.STATE.INIT
 
     def on_setup(self, rtsp_packet):
-        print("Handling setup request...")
-        if self.status != self.STATE.INIT:
-            print("Exception: server is already setup")
-            return False
+        # print("Handling setup request...")
+        # if self.status != self.STATE.INIT:
+        #     print("Exception: server is already setup")
+        #     return False
         
-        self.status = self.STATE.PAUSED
-        print('State set to PAUSED')
-        
-        self.video_streamer = Streamer(self.client_addr[0], rtsp_packet.rtp_dst_port, rtsp_packet.file_path)
+        # self.status = self.STATE.PAUSED
+        # print('State set to PAUSED')
+        self.streamer.add_device(rtsp_packet.rtp_dst_port, rtsp_packet.file_path)
         print(rtsp_packet.file_path)
         
         return True
         
     def on_play(self, rtsp_packet):
-        start = time.time()
         print("Handling play request Sending...")
         self.status = self.STATE.PLAYING
-        self.video_streamer.start_stream()
-        print(time.time() - start)
+        self.streamer.start_stream(rtsp_packet.file_path)
         return True
 
     def on_pause(self, rtsp_packet):

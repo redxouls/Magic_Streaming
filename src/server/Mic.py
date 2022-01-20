@@ -12,7 +12,7 @@ class Mic:
 
     def get_frame(self):
         data = b''
-        data += b'Sound Start'
+        # data += b'Sound Start'
         data += self.stream.read(self.CHUNK, exception_on_overflow = False)
         data += b'Sound End'
         return data

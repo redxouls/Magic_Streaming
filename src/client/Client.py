@@ -1,13 +1,19 @@
-import socket, time
-from protocols.RTSP import RTSP
-from protocols.RTP import RTP
+import socket, time, threading
+import pyaudio
 
 from io import BytesIO
 import numpy as np
 from PIL import Image
-
-import matplotlib.pyplot as plt
 import cv2
+
+from protocols.RTSP import RTSP
+from protocols.RTP import RTP
+
+
+FORMAT = pyaudio.paInt16
+CHANNELS = 1
+RATE = 44100
+CHUNK = 4096
 
 class Client():
     DEFAULT_CHUNK_SIZE = 4096
@@ -17,7 +23,7 @@ class Client():
         self.rtp_port = args.rtp_port
         self.timeout = args.timeout
         self.rtp_timeout = args.rtp_timeout
-        # self.valid_operations = ['setup', 'play', 'pause', 'teardown']
+        
         self.operations = {
             "setup": self.setup,
             "play": self.play,
@@ -41,14 +47,31 @@ class Client():
     def setup(self):
         print("Setup")
         self.rtp_init('camera')
-        # self.rtp_init('mic')
+        self.send_request('setup', 'camera')
+        self.handle_receive()
+        
+        self.rtp_init('mic')
+        self.send_request('setup', 'mic')
+        self.handle_receive()
+
 
     def play(self):
         print("Play")
+        self.send_request('play', 'mic')
+        self.handle_receive()
+        
+        thread = threading.Thread(target=self.start_listen)
+        thread.start()
+
+
+        self.send_request('play', 'camera')
+        self.handle_receive()
         while True:
             start = time.time()
             try:
-                decode_img = self.rtp_get_frame('camera')
+                img_raw = self.rtp_get_raw('camera')
+                io_buf = BytesIO(img_raw)
+                decode_img = cv2.imdecode(np.frombuffer(io_buf.getbuffer(), np.uint8), 1)
                 cv2.imshow('frame', decode_img)
             except:
                 print("Error frame drop")
@@ -58,6 +81,24 @@ class Client():
             # 若按下 q 鍵則離開迴圈
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
+    
+    def start_listen(self):
+        audio = pyaudio.PyAudio()
+        stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, output=True, frames_per_buffer=CHUNK)
+        eof = b'Sound End'
+        try:
+            while True:
+                data = self.rtp_get_raw('mic')
+                print(len(data))
+                data = data[:-len(eof)]
+                stream.write(data)
+        except KeyboardInterrupt:
+            return
+        except:
+            stream.close()
+            audio.terminate()
+
+
 
     def pause(self):
         print("pause")
@@ -71,7 +112,7 @@ class Client():
         packet = RTSP(
             packet_type=operation,
             seq_num=self.seq,
-            rtp_dst_port=self.rtp_port,
+            rtp_dst_port=self.rtp_sockets[device][1],
             session_id=0,
             file_path=device
         ).build_request()
@@ -111,9 +152,9 @@ class Client():
                 continue
             else:
                 start = time.time()
-                self.send_request(operation_type, 'camera')
+                
                 self.operations[operation_type]()
-                self.handle_receive()
+                
                 print((time.time() - start))                
             print()
 
@@ -126,7 +167,7 @@ class Client():
         self.rtp_sockets[device] = (s, port)
 
         
-    def rtp_get_frame(self, device):
+    def rtp_get_raw(self, device):
         rtp_socket, _ = self.rtp_sockets[device]
 
         recv = bytes()
@@ -145,12 +186,8 @@ class Client():
                 continue
         print(f"Packet Received!")
         received_packet = RTP.receive(recv)
-        img_raw = received_packet.payload
-        io_buf = BytesIO(img_raw)
-        decode_img = cv2.imdecode(np.frombuffer(io_buf.getbuffer(), np.uint8), 1)
-        if (device == 'mic'):
-            print(len(recv))
-        return decode_img
+        raw = received_packet.payload
+        return raw
         
 
 if __name__ == "__main__":

@@ -12,8 +12,9 @@ class Camera:
         cur = time.time()
         _, frame = self.cap.read()
         
-        frame = cv2.resize(frame, (480, 360), interpolation=cv2.INTER_AREA)
-        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 100]
+        frame = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_AREA)
+        frame = cv2.flip(frame, 1)
+        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 50]
         success, img_buffer = cv2.imencode('.jpg', frame, encode_param)
         io_buf = BytesIO(img_buffer)
         io_buf.seek(0)
@@ -34,6 +35,8 @@ if __name__ == '__main__':
         start = time.time()
         # 從攝影機擷取一張影像
         ret, frame = cap.read()
+        
+        print(frame.shape)
 
         encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
         success, img_buffer = cv2.imencode('.jpg', frame, encode_param)
