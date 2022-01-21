@@ -15,7 +15,7 @@ def get_args():
     )
     parser.add_argument(
         "--timeout",
-        default="5",
+        default="10000",
         type=int,
         metavar="<timeout(second)>",
         help="wait time before diconnection (second)",

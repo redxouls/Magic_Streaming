@@ -97,12 +97,12 @@ class Window(QMainWindow):
         self.pause_btn.setEnabled(True)
 
     def handle_pause(self):
-        # self.client.pause()
+        self.client.pause()
         self.play_btn.setEnabled(True)
         self.pause_btn.setEnabled(False)
 
     def handle_teardown(self):
-        # self.client.tear_down()
+        self.client.tear_down()
         self.setup_btn.setEnabled(True)
         self.play_btn.setEnabled(False)
         self.pause_btn.setEnabled(False)

@@ -41,6 +41,7 @@ class Client:
         self.rtp_sockets = dict()
         self.threads = dict()
         self.detector = detector
+        self.results = []
         self.decode_img = None
 
     def connect(self):
@@ -102,6 +103,7 @@ class Client:
     def stream_video(self):
         self.is_streaming = True
         counts = 0
+        self.results = []
         while self.is_streaming:
             start = time.time()
             try:
@@ -112,10 +114,10 @@ class Client:
                 )
                 #  TO DO HERE
                 if counts % 10 == 0:
-                    results = self.detector.bounding_box(decode_img)
+                    self.results = self.detector.bounding_box(decode_img)
 
                 emphasize = []
-                for r in results:
+                for r in self.results:
                     emphasize.append(
                         decode_img[r[0][1] : r[1][1], r[0][0] : r[1][0], :]
                     )
@@ -124,10 +126,11 @@ class Client:
 
                 for i, img in enumerate(emphasize):
                     decode_img[
-                        results[i][0][1] : results[i][1][1],
-                        results[i][0][0] : results[i][1][0],
+                        self.results[i][0][1] : self.results[i][1][1],
+                        self.results[i][0][0] : self.results[i][1][0],
                         :,
                     ] = img
+                decode_img = cv2.cvtColor(decode_img, cv2.COLOR_BGR2RGB)
                 self.decode_img = Image.fromarray(decode_img)
 
             except Exception as e:
@@ -161,7 +164,6 @@ class Client:
 
         self.rtp_sockets = {}
         self.threads = {}
-        self.detector = None
         self.decode_img = None
 
     def send_request(self, operation, device):
@@ -245,7 +247,6 @@ class Client:
         received_packet = RTP.receive(recv)
         raw = received_packet.payload
         timestamp = received_packet.timestamp
-        print(device, timestamp)
         return raw
 
 
