@@ -9,7 +9,6 @@ import cv2
 from protocols.RTSP import RTSP
 from protocols.RTP import RTP
 
-
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 44100
@@ -35,8 +34,9 @@ class Client():
         self.seq = 0
 
         self.rtp_sockets = dict()
-
+        self.threads = dict()
         self.detector = detector
+        self.decode_img = None
         
     def connect(self):
         self.rtsp_s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -63,12 +63,33 @@ class Client():
         self.send_request('play', 'mic')
         self.handle_receive()
         
-        thread = threading.Thread(target=self.start_listen)
-        thread.start()
-
+        self.threads['mic'] = threading.Thread(target=self.stream_audio)
+        self.threads['mic'].start()
 
         self.send_request('play', 'camera')
         self.handle_receive()
+
+        self.threads['camera'] = threading.Thread(target=self.stream_video)
+        self.threads['camera'].start()
+        
+            
+    def stream_audio(self):
+        audio = pyaudio.PyAudio()
+        stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, output=True, frames_per_buffer=CHUNK)
+        eof = b'Sound End'
+        try:
+            while True:
+                data = self.rtp_get_raw('mic')
+                data = data[:-len(eof)]
+                stream.write(data)
+                # time.sleep(0.007)
+        except KeyboardInterrupt:
+            return
+        except:
+            stream.close()
+            audio.terminate()
+    
+    def stream_video(self):
         counts = 0
         while True:
             start = time.time()
@@ -92,8 +113,8 @@ class Client():
                     decode_img[
                         results[i][0][1]:results[i][1][1], results[i][0][0]:results[i][1][0], :
                     ] = img
+                self.decode_img = Image.fromarray(decode_img)
 
-                cv2.imshow('frame', decode_img)
             except Exception as e:
                 print("Error frame drop")
                 print(e)
@@ -102,25 +123,7 @@ class Client():
                 if counts % 10 != 0:
                     time.sleep(0.05)
                 counts += 1
-            # 若按下 q 鍵則離開迴圈
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-    
-    def start_listen(self):
-        audio = pyaudio.PyAudio()
-        stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, output=True, frames_per_buffer=CHUNK)
-        eof = b'Sound End'
-        try:
-            while True:
-                data = self.rtp_get_raw('mic')
-                data = data[:-len(eof)]
-                stream.write(data)
-                # time.sleep(0.007)
-        except KeyboardInterrupt:
-            return
-        except:
-            stream.close()
-            audio.terminate()
+
 
     def pause(self):
         print("pause")

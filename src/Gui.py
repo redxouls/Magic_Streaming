@@ -1,5 +1,6 @@
 import sys
 import os
+import time
 from PyQt5.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QApplication, QSizePolicy
 from PyQt5.QtWidgets import QMainWindow, QWidget, QPushButton, QSlider
 from PyQt5.QtGui import QPixmap, QIcon
@@ -7,11 +8,14 @@ from PyQt5.QtCore import pyqtSignal, QTimer, QSize, Qt
 from PIL.ImageQt import ImageQt
 
 from client.Client import Client
+from main_client import get_args
+
+from object_detect import object_detection
 
 class Window(QMainWindow):
     image_signal = pyqtSignal()
 
-    def __init__(self, args, detector):
+    def __init__(self, args, client):
         super(Window, self).__init__()
         self.view_port = QLabel()
         self.target = QPushButton()
@@ -23,11 +27,14 @@ class Window(QMainWindow):
         self.teardown_btn = QPushButton()
         self.volume = QSlider()
         self.error_label = QLabel()
-        # self.client = Client(args, detector)
         self.image_signal.connect(self.reload_image)
         self.reload_timer = QTimer()
         self.reload_timer.timeout.connect(self.image_signal.emit)
         self.init_ui()
+
+        self.client = client
+        self.client.connect()
+
 
     def init_ui(self):
         self.setWindowTitle("Magic Streaming")
@@ -77,7 +84,7 @@ class Window(QMainWindow):
         central_widget.setLayout(layout)
 
     def handle_setup(self):
-        # self.client.setup()
+        self.client.setup()
         self.setup_btn.setEnabled(False)
         self.play_btn.setEnabled(True)
         self.pause_btn.setEnabled(True)
@@ -85,7 +92,7 @@ class Window(QMainWindow):
         self.reload_timer.start(0)
 
     def handle_play(self):
-        # self.client.play()
+        self.client.play()
         self.play_btn.setEnabled(False)
         self.pause_btn.setEnabled(True)
 
@@ -104,20 +111,30 @@ class Window(QMainWindow):
         # disconnect ???
 
     def reload_image(self):
-        # self.client.play() return frame or pix ???
-
-        # frame = self.client.play()
-        # pix = QPixmap.fromImage(ImageQt(frame[0]).copy())
-        # self.view_port.setPixmap(pix)
-        self.view_port.setPixmap(QPixmap("./images/heart.svg"))
+        frame = self.client.decode_img
+        if frame != None:
+            pix = QPixmap.fromImage(ImageQt(frame).copy())
+            self.view_port.setPixmap(pix)
+            return
+        time.sleep(0.01)
+        # self.view_port.setPixmap(QPixmap("./images/heart.svg"))
         
 
 if __name__ == '__main__':
+    import argparse
     app = QApplication(sys.argv)
-    window = Window(1, 1)
 
-    available_geometry = window.screen().availableGeometry()
-    window.resize(available_geometry.width() / 3,
-                    available_geometry.height() / 2)
+
+    # available_geometry = window.screen().asvailableGeometry()
+    # window.resize(available_geometry.width() / 3,
+    #                 available_geometry.height() / 2)
+    args = get_args()
+    
+    detector = object_detection("yolov5s.pt")
+    client = Client(args, detector)
+
+    window = Window(args, client)
+
+    window.resize(680, 500)
     window.show()
     sys.exit(app.exec())
