@@ -115,7 +115,7 @@ class Client():
                 data = self.rtp_get_raw('mic')
                 data = data[:-len(eof)]
                 stream.write(data)
-                time.sleep(0.007)
+                # time.sleep(0.007)
         except KeyboardInterrupt:
             return
         except:
