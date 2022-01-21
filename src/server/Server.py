@@ -21,18 +21,26 @@ class Server:
         client.settimeout(self.timeout)
         print(client_addr)
         incoming_session_id = str(uuid.uuid4())
-        incoming_session = Session(client=client, client_addr=client_addr, rtsp_session_id=incoming_session_id)
+        incoming_session = Session(
+            client=client, client_addr=client_addr, rtsp_session_id=incoming_session_id
+        )
         incoming_session.listen()
         self.sessions[incoming_session_id] = incoming_session
-        
+
     def clean_timeout(self):
-        to_del = [session_id for session_id, session in self.sessions.items() if session.client.fileno() == -1]
+        to_del = [
+            session_id
+            for session_id, session in self.sessions.items()
+            if session.client.fileno() == -1
+        ]
         to_del_num = len(to_del)
         for session_id in to_del:
             del self.sessions[session_id]
-        
-        print("Toal session: %s, Release session# = %d" % (len(self.sessions), to_del_num))
-            
+
+        print(
+            "Toal session: %s, Release session# = %d" % (len(self.sessions), to_del_num)
+        )
+
     def main(self):
         self.server_init()
         while True:
@@ -56,7 +64,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--timeout",
-        default="5",
+        default="100000",
         type=int,
         metavar="<timeout(second)>",
         help="wait time before diconnection (second)",

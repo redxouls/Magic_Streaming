@@ -16,15 +16,17 @@ RATE = 44100
 TIME = 0.023219954648526078
 CHUNK = 1024
 
-class Client():
+
+class Client:
     DEFAULT_CHUNK_SIZE = 4096
+
     def __init__(self, args, detector):
         self.ip = args.ip
         self.port = args.port
         self.rtp_port = args.rtp_port
         self.timeout = args.timeout
         self.rtp_timeout = args.rtp_timeout
-        
+
         self.operations = {
             "setup": self.setup,
             "play": self.play,
@@ -34,66 +36,72 @@ class Client():
         self.connected = False
         self.seq = 0
 
+        # NOTE: is_pause and is_teardown
+        self.is_pause = False
+        self.is_teardown = False
+
         self.rtp_sockets = dict()
 
         self.detector = detector
-        
+
     def connect(self):
         self.rtsp_s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.rtsp_s.connect((self.ip, self.port))
         self.rtsp_s.settimeout(self.timeout)
         self.connected = True
-    
+
     def disconnect(self):
         self.rtsp_s.close()
 
     def setup(self):
         print("Setup")
-        self.rtp_init('camera')
-        self.send_request('setup', 'camera')
-        self.handle_receive()
-        
-        self.rtp_init('mic')
-        self.send_request('setup', 'mic')
+        self.rtp_init("camera")
+        self.send_request("setup", "camera")
         self.handle_receive()
 
+        self.rtp_init("mic")
+        self.send_request("setup", "mic")
+        self.handle_receive()
 
     def play(self):
         print("Play")
-        self.send_request('play', 'mic')
+        self.send_request("play", "mic")
         self.handle_receive()
-        
-        thread = threading.Thread(target=self.start_listen)
-        thread.start()
 
+        self.mic_thread = threading.Thread(target=self.start_listen)
+        self.mic_thread.start()
 
-        self.send_request('play', 'camera')
+        self.send_request("play", "camera")
         self.handle_receive()
         counts = 0
         while True:
             start = time.time()
             try:
-                img_raw = self.rtp_get_raw('camera')
+                img_raw = self.rtp_get_raw("camera")
                 io_buf = BytesIO(img_raw)
-                decode_img = cv2.imdecode(np.frombuffer(io_buf.getbuffer(), np.uint8), 1)
+                decode_img = cv2.imdecode(
+                    np.frombuffer(io_buf.getbuffer(), np.uint8), 1
+                )
                 #  TO DO HERE
                 if counts % 10 == 0:
                     results = self.detector.bounding_box(decode_img)
-                
+
                 emphasize = []
                 for r in results:
                     emphasize.append(
-                        decode_img[r[0][1]:r[1][1], r[0][0]:r[1][0], :]
+                        decode_img[r[0][1] : r[1][1], r[0][0] : r[1][0], :]
                     )
 
                 decode_img = cv2.blur(decode_img, (30, 30))
 
                 for i, img in enumerate(emphasize):
                     decode_img[
-                        results[i][0][1]:results[i][1][1], results[i][0][0]:results[i][1][0], :
+                        results[i][0][1] : results[i][1][1],
+                        results[i][0][0] : results[i][1][0],
+                        :,
                     ] = img
 
-                cv2.imshow('frame', decode_img)
+                cv2.imshow("frame", decode_img)
             except Exception as e:
                 print("Error frame drop")
                 print(e)
@@ -103,17 +111,55 @@ class Client():
                     time.sleep(0.05)
                 counts += 1
             # 若按下 q 鍵則離開迴圈
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            key = cv2.waitKey(1)
+            if key & 0xFF == ord("p"):
+                # NOTE: set is_pause to True to stop both camera and mic, and get into pause()
+                self.is_pause = True
+                self.send_request("pause", "mic")
+                self.handle_receive()
+                time.sleep(0.01)
+                self.send_request("pause", "camera")
+                self.handle_receive()
+                self.pause()
                 break
-    
+            elif key & 0xFF == ord("q"):
+                # NOTE: when teardown, break
+                print("quit")
+                self.is_teardown = True
+                self.send_request("teardown", "mic")
+                self.handle_receive()
+                self.send_request("teardown", "camera")
+                self.handle_receive()
+                self.tear_down()
+                break
+
     def start_listen(self):
         audio = pyaudio.PyAudio()
-        stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, output=True, frames_per_buffer=CHUNK)
-        eof = b'Sound End'
+        stream = audio.open(
+            format=FORMAT,
+            channels=CHANNELS,
+            rate=RATE,
+            output=True,
+            frames_per_buffer=CHUNK,
+        )
+        eof = b"Sound End"
         try:
             while True:
-                data = self.rtp_get_raw('mic')
-                data = data[:-len(eof)]
+                # NOTE: if is_teardown -> throw an error; if is_pause -> get into pause
+                assert not self.is_teardown
+                assert not self.is_pause
+                #  if self.is_pause:
+                #     stream.close()
+                #     self.pause()
+                #     stream = audio.open(
+                #         format=FORMAT,
+                #         channels=CHANNELS,
+                #         rate=RATE,
+                #         output=True,
+                #         frames_per_buffer=CHUNK,
+                #     )
+                data = self.rtp_get_raw("mic")
+                data = data[: -len(eof)]
                 stream.write(data)
                 # time.sleep(0.007)
         except KeyboardInterrupt:
@@ -124,6 +170,11 @@ class Client():
 
     def pause(self):
         print("pause")
+        while True:
+            if cv2.waitKey(1) & 0xFF == ord("c"):
+                self.is_pause = False
+                break
+        self.play()
 
     def tear_down(self):
         print("teardown")
@@ -136,19 +187,19 @@ class Client():
             seq_num=self.seq,
             rtp_dst_port=self.rtp_sockets[device][1],
             session_id=0,
-            file_path=device
+            file_path=device,
         ).build_request()
 
         if not self.connected:
-            raise Exception('Connection not found! Please connect to server first.')
-        
+            raise Exception("Connection not found! Please connect to server first.")
+
         print(f"Sending request: {repr(packet.decode())}")
         self.rtsp_s.send(packet)
         self.seq += 1
         return True
 
     def handle_receive(self):
-        try:    
+        try:
             request_raw = self.rtsp_s.recv(4096)
             request = request_raw.decode()
             print(f"Received from server: {repr(request)}")
@@ -170,34 +221,35 @@ class Client():
                 break
             elif operation_type not in self.operations:
                 print("Operation Not Permitted!!!")
-                print("Try the following oprtations: " + ", ".join(list(self.valid_operations)))
+                print(
+                    "Try the following oprtations: "
+                    + ", ".join(list(self.valid_operations))
+                )
                 continue
             else:
                 start = time.time()
-                
+
                 self.operations[operation_type]()
-                
-                print((time.time() - start))                
+
+                print((time.time() - start))
             print()
 
-    
     def rtp_init(self, device):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         port = self.rtp_port + len(self.rtp_sockets)
         s.bind(("127.0.0.1", port))
-        s.settimeout(self.rtp_timeout / 1000.)
+        s.settimeout(self.rtp_timeout / 1000.0)
         self.rtp_sockets[device] = (s, port)
 
-        
     def rtp_get_raw(self, device):
         rtp_socket, _ = self.rtp_sockets[device]
-        
+
         recv = bytes()
-        if device == 'camera':
-            eof = b'\xff\xd9'
-        elif device == 'mic':
-            eof = b'Sound End'
-        
+        if device == "camera":
+            eof = b"\xff\xd9"
+        elif device == "mic":
+            eof = b"Sound End"
+
         while True:
             try:
                 recv += rtp_socket.recv(self.DEFAULT_CHUNK_SIZE)
@@ -210,27 +262,61 @@ class Client():
         timestamp = received_packet.timestamp
         print(device, timestamp)
         return raw
-        
+
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ip', default='127.0.0.1', type=str, metavar='<IP>',
-                    help='IP for target rtsp server')
-    parser.add_argument('--port', default=7777, type=int, metavar='<port>',
-                    help='port of target rtsp server')
-    parser.add_argument('--rtp-port', default=20202, type=int, metavar='<rtp-port>',
-                    help='port to listen rtp stream')
-    parser.add_argument('--operation', default='setup', type=str, choices=['setup', 'play', 'pause', 'teardown'], metavar='<operation>',
-                    help='operation_type to be sent')
-    parser.add_argument('--timeout', default=5, type=int, metavar='<timeout>',
-                    help='seconds to wait before timeout rtsp session')
-    parser.add_argument('--rtp-timeout', default=5, type=int, metavar='<rtp-timeout>',
-                    help='seconds to wait before timeout rtp session')
-    parser.add_argument("--interactive", action="store_true", help='Activate interactive mode')
+    parser.add_argument(
+        "--ip",
+        default="127.0.0.1",
+        type=str,
+        metavar="<IP>",
+        help="IP for target rtsp server",
+    )
+    parser.add_argument(
+        "--port",
+        default=7777,
+        type=int,
+        metavar="<port>",
+        help="port of target rtsp server",
+    )
+    parser.add_argument(
+        "--rtp-port",
+        default=20202,
+        type=int,
+        metavar="<rtp-port>",
+        help="port to listen rtp stream",
+    )
+    parser.add_argument(
+        "--operation",
+        default="setup",
+        type=str,
+        choices=["setup", "play", "pause", "teardown"],
+        metavar="<operation>",
+        help="operation_type to be sent",
+    )
+    parser.add_argument(
+        "--timeout",
+        default=5,
+        type=int,
+        metavar="<timeout>",
+        help="seconds to wait before timeout rtsp session",
+    )
+    parser.add_argument(
+        "--rtp-timeout",
+        default=5,
+        type=int,
+        metavar="<rtp-timeout>",
+        help="seconds to wait before timeout rtp session",
+    )
+    parser.add_argument(
+        "--interactive", action="store_true", help="Activate interactive mode"
+    )
 
     args = parser.parse_args()
-    
+
     client = Client(args)
     if args.interactive:
         client.shell()

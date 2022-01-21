@@ -2,6 +2,7 @@ import socket, threading, time
 from protocols.RTSP import RTSP
 from .Streamer import Streamer
 
+
 class Session:
     class STATE:
         INIT = 0
@@ -30,14 +31,14 @@ class Session:
         # if self.status != self.STATE.INIT:
         #     print("Exception: server is already setup")
         #     return False
-        
+
         # self.status = self.STATE.PAUSED
         # print('State set to PAUSED')
         self.streamer.add_device(rtsp_packet.rtp_dst_port, rtsp_packet.file_path)
         print(rtsp_packet.file_path)
-        
+
         return True
-        
+
     def on_play(self, rtsp_packet):
         print("Handling play request Sending...")
         self.status = self.STATE.PLAYING
@@ -47,10 +48,15 @@ class Session:
     def on_pause(self, rtsp_packet):
         print("Pause Request Sending...")
         self.status = "pause"
+        print(rtsp_packet.file_path)
+        self.streamer.threads[rtsp_packet.file_path][1] = False
+        return True
 
     def on_tear_down(self, rtsp_packet):
         print("tearDown Request Sending...")
         self.status = "teardown"
+        self.streamer.threads[rtsp_packet.file_path][1] = False
+        return True
 
     def on_error(self, rtsp_packet):
         print("Operation Not Permitted!!!")
@@ -60,18 +66,20 @@ class Session:
 
     def handle_receive(self):
         while True:
-            try:    
+            try:
                 request_raw = self.client.recv(4096)
                 request = request_raw.decode()
                 if request == "":
                     self.close_connection()
                     return
-                
+
                 print(f"Received from client: {repr(request)}")
                 request_rtsp_packet = self.rtsp.get_request(request_raw)
-                if self.operations[request_rtsp_packet.packet_type.lower()](request_rtsp_packet):
+                if self.operations[request_rtsp_packet.packet_type.lower()](
+                    request_rtsp_packet
+                ):
                     self.send_response()
-            
+
             except socket.timeout:
                 self.close_connection()
                 return
@@ -80,7 +88,7 @@ class Session:
         response = self.rtsp.build_response()
         self.client.send(response)
         self.rtsp.seq_num += 1
-        print('Sent response to client.')
+        print("Sent response to client.")
 
     def close_connection(self):
         print("Connection Closed rtsp_session_id: %s" % self.rtsp_session_id)
