@@ -11,7 +11,7 @@ class Mic:
     
     def __init__(self,):
         audio = pyaudio.PyAudio()
-        # self.stream = audio.open(format=self.FORMAT, channels=self.CHANNELS, rate=self.RATE, input=True,input_device_index=1, frames_per_buffer=self.CHUNK)
+        # self.stream = audio.open(format=self.FORMAT, channels=self.CHANNELS, rate=self.RATE, input=True,input_device_index=2, frames_per_buffer=self.CHUNK)
         self.stream = audio.open(format=self.FORMAT, channels=self.CHANNELS, rate=self.RATE, input=True, frames_per_buffer=self.CHUNK)
         self.thread = threading.Thread(target=self.update_frame)
         self.picked = False
