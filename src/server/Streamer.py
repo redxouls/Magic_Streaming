@@ -32,20 +32,22 @@ class Streamer:
             # frame_number = self._video_stream.current_frame_number
             
             frame = self.devices[device].get_frame()
-    
-            rtp_packet = RTP(
-                payload_type=self.MEDIA_TYPE.STRING,
-                seq_num=0,
-                timestamp=0,
-                payload=frame
-            )
-            # print(f"Sending packet #{frame_number}")
-            # print('Packet header:')
-            # rtp_packet.print_header()
-            packet = rtp_packet.get_packet()
-            self.send_rtp_packet(device, packet)
-            time.sleep(0.1)
-
+            if frame:
+                rtp_packet = RTP(
+                    payload_type=self.MEDIA_TYPE.STRING,
+                    seq_num=0,
+                    timestamp=int(time.time()),
+                    payload=frame
+                )
+                # print(f"Sending packet #{frame_number}")
+                # print('Packet header:')
+                # rtp_packet.print_header()
+                packet = rtp_packet.get_packet()
+                self.send_rtp_packet(device, packet)
+                if device == 'mic':
+                    time.sleep(0.0095)
+                else:
+                    time.sleep(0.1)
     def send_rtp_packet(self, device, packet):
         rtp_socket, client_port = self.rtp_sockets[device]
         print(device, client_port)

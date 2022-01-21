@@ -18,7 +18,9 @@ for i in range(0, numdevices):
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 44100
-CHUNK = 4096
+TIME = 0.023219954648526078
+# CHUNK = int(RATE*TIME)
+CHUNK = 1024
 
 audio = pyaudio.PyAudio()
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -29,11 +31,14 @@ stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True,inpu
 
 # input_stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, output=True, frames_per_buffer=CHUNK)
 
-
 while True:
     data = stream.read(CHUNK)
+    print(hash(data))
     print(len(data))
     s.sendto(data, (sys.argv[1], int(sys.argv[2])))
+    # time.sleep(TIME)
+
+    
 
 print("finished recording")
 

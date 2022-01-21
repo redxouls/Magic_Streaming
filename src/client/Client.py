@@ -13,7 +13,8 @@ from protocols.RTP import RTP
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 44100
-CHUNK = 4096
+TIME = 0.023219954648526078
+CHUNK = 1024
 
 class Client():
     DEFAULT_CHUNK_SIZE = 4096
@@ -114,13 +115,12 @@ class Client():
                 data = self.rtp_get_raw('mic')
                 data = data[:-len(eof)]
                 stream.write(data)
+                time.sleep(0.007)
         except KeyboardInterrupt:
             return
         except:
             stream.close()
             audio.terminate()
-
-
 
     def pause(self):
         print("pause")
@@ -207,6 +207,8 @@ class Client():
                 continue
         received_packet = RTP.receive(recv)
         raw = received_packet.payload
+        timestamp = received_packet.timestamp
+        print(device, timestamp)
         return raw
         
 
