@@ -2,6 +2,12 @@
 
 ## How to Run
 
+Before Running Code
+
+```bash
+pip install -r requirements.txt  # install
+```
+
 Server side
 
 ```bash
@@ -31,3 +37,7 @@ Client side
 cd src
 python3 Gui.py --ip 127.0.0.1 --port  8888
 ```
+
+Reference:
+YOLOv5: https://github.com/ultralytics/yolov5
+rtsp-rtp-stream: https://github.com/gabrieljablonski/rtsp-rtp-stream
