@@ -43,6 +43,8 @@ class Client:
         self.detector = detector
         self.results = []
         self.decode_img = None
+        self.img_buffer = []
+        self.img_timestamp = []
 
     def connect(self):
         self.rtsp_s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -90,7 +92,7 @@ class Client:
         eof = b"Sound End"
         try:
             while self.is_streaming:
-                data = self.rtp_get_raw("mic")
+                data, timestamp = self.rtp_get_raw("mic")
                 data = data[: -len(eof)]
                 stream.write(data)
                 # time.sleep(0.007)
@@ -107,31 +109,35 @@ class Client:
         while self.is_streaming:
             start = time.time()
             try:
-                img_raw = self.rtp_get_raw("camera")
-                io_buf = BytesIO(img_raw)
-                decode_img = cv2.imdecode(
-                    np.frombuffer(io_buf.getbuffer(), np.uint8), 1
-                )
-                #  TO DO HERE
-                if counts % 10 == 0:
-                    self.results = self.detector.bounding_box(decode_img)
-
-                emphasize = []
-                for r in self.results:
-                    emphasize.append(
-                        decode_img[r[0][1] : r[1][1], r[0][0] : r[1][0], :]
+                img_raw, timestamp = self.rtp_get_raw("camera")
+                self.img_buffer.append(img_raw)
+                self.img_timestamp.append(timestamp)
+                if len(self.img_buffer) >= 10:
+                    img_raw = self.img_buffer.pop(0)
+                    io_buf = BytesIO(img_raw)
+                    decode_img = cv2.imdecode(
+                        np.frombuffer(io_buf.getbuffer(), np.uint8), 1
                     )
+                    #  TO DO HERE
+                    if counts % 10 == 0:
+                        self.results = self.detector.bounding_box(decode_img)
 
-                decode_img = cv2.blur(decode_img, (30, 30))
+                    emphasize = []
+                    for r in self.results:
+                        emphasize.append(
+                            decode_img[r[0][1] : r[1][1], r[0][0] : r[1][0], :]
+                        )
 
-                for i, img in enumerate(emphasize):
-                    decode_img[
-                        self.results[i][0][1] : self.results[i][1][1],
-                        self.results[i][0][0] : self.results[i][1][0],
-                        :,
-                    ] = img
-                decode_img = cv2.cvtColor(decode_img, cv2.COLOR_BGR2RGB)
-                self.decode_img = Image.fromarray(decode_img)
+                    decode_img = cv2.blur(decode_img, (30, 30))
+
+                    for i, img in enumerate(emphasize):
+                        decode_img[
+                            self.results[i][0][1] : self.results[i][1][1],
+                            self.results[i][0][0] : self.results[i][1][0],
+                            :,
+                        ] = img
+                    decode_img = cv2.cvtColor(decode_img, cv2.COLOR_BGR2RGB)
+                    self.decode_img = Image.fromarray(decode_img)
 
             except Exception as e:
                 print("Error frame drop")
@@ -224,7 +230,7 @@ class Client:
     def rtp_init(self, device):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         port = self.rtp_port + len(self.rtp_sockets)
-        s.bind(("127.0.0.1", port))
+        s.bind(("0.0.0.0", port))
         s.settimeout(self.rtp_timeout / 1000.0)
         self.rtp_sockets[device] = (s, port)
 
@@ -247,7 +253,9 @@ class Client:
         received_packet = RTP.receive(recv)
         raw = received_packet.payload
         timestamp = received_packet.timestamp
-        return raw
+
+        # print("device: {}".format(device), timestamp/100)
+        return raw, timestamp
 
 
 if __name__ == "__main__":
