@@ -12,7 +12,7 @@ def get_args():
                     help='port to listen rtp stream')
     parser.add_argument('--operation', default='setup', type=str, choices=['setup', 'play', 'pause', 'teardown'], metavar='<operation>',
                     help='operation_type to be sent')
-    parser.add_argument('--timeout', default=5, type=int, metavar='<timeout>',
+    parser.add_argument('--timeout', default=10000, type=int, metavar='<timeout>',
                     help='seconds to wait before timeout rtsp session')
     parser.add_argument('--rtp-timeout', default=5, type=int, metavar='<rtp-timeout>',
                     help='seconds to wait before timeout rtp session')
