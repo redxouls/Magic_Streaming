@@ -86,6 +86,7 @@ class Client:
             format=FORMAT,
             channels=CHANNELS,
             rate=RATE,
+            input_device_index=2,
             output=True,
             frames_per_buffer=CHUNK,
         )
@@ -112,32 +113,32 @@ class Client:
                 img_raw, timestamp = self.rtp_get_raw("camera")
                 self.img_buffer.append(img_raw)
                 self.img_timestamp.append(timestamp)
-                if len(self.img_buffer) >= 10:
-                    img_raw = self.img_buffer.pop(0)
-                    io_buf = BytesIO(img_raw)
-                    decode_img = cv2.imdecode(
-                        np.frombuffer(io_buf.getbuffer(), np.uint8), 1
+                # if len(self.img_buffer) >= 1:
+                    # img_raw = self.img_buffer.pop(0)
+                io_buf = BytesIO(img_raw)
+                decode_img = cv2.imdecode(
+                    np.frombuffer(io_buf.getbuffer(), np.uint8), 1
+                )
+                #  TO DO HERE
+                if counts % 10 == 0:
+                    self.results = self.detector.bounding_box(decode_img)
+
+                emphasize = []
+                for r in self.results:
+                    emphasize.append(
+                        decode_img[r[0][1] : r[1][1], r[0][0] : r[1][0], :]
                     )
-                    #  TO DO HERE
-                    if counts % 10 == 0:
-                        self.results = self.detector.bounding_box(decode_img)
 
-                    emphasize = []
-                    for r in self.results:
-                        emphasize.append(
-                            decode_img[r[0][1] : r[1][1], r[0][0] : r[1][0], :]
-                        )
+                decode_img = cv2.blur(decode_img, (30, 30))
 
-                    decode_img = cv2.blur(decode_img, (30, 30))
-
-                    for i, img in enumerate(emphasize):
-                        decode_img[
-                            self.results[i][0][1] : self.results[i][1][1],
-                            self.results[i][0][0] : self.results[i][1][0],
-                            :,
-                        ] = img
-                    decode_img = cv2.cvtColor(decode_img, cv2.COLOR_BGR2RGB)
-                    self.decode_img = Image.fromarray(decode_img)
+                for i, img in enumerate(emphasize):
+                    decode_img[
+                        self.results[i][0][1] : self.results[i][1][1],
+                        self.results[i][0][0] : self.results[i][1][0],
+                        :,
+                    ] = img
+                decode_img = cv2.cvtColor(decode_img, cv2.COLOR_BGR2RGB)
+                self.decode_img = Image.fromarray(decode_img)
 
             except Exception as e:
                 print("Error frame drop")
@@ -160,10 +161,10 @@ class Client:
     def tear_down(self):
         print("teardown")
         self.is_streaming = False
-        self.send_request("pause", "mic")
+        self.send_request("teardown", "mic")
         self.handle_receive()
         time.sleep(0.05)
-        self.send_request("pause", "camera")
+        self.send_request("teardown", "camera")
         self.handle_receive()
         self.rtp_sockets["mic"][0].close()
         self.rtp_sockets["camera"][0].close()

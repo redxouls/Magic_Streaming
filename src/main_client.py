@@ -14,7 +14,7 @@ def get_args():
                     help='operation_type to be sent')
     parser.add_argument('--timeout', default=10000, type=int, metavar='<timeout>',
                     help='seconds to wait before timeout rtsp session')
-    parser.add_argument('--rtp-timeout', default=5, type=int, metavar='<rtp-timeout>',
+    parser.add_argument('--rtp-timeout', default=10000, type=int, metavar='<rtp-timeout>',
                     help='seconds to wait before timeout rtp session')
     parser.add_argument("--interactive", action="store_true", help='Activate interactive mode')
 
